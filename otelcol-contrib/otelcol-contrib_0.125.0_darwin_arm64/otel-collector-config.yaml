@@ -1,0 +1,48 @@
+receivers:
+  otlp: # Naming this receiver 'otlp'
+    protocols:
+      http: # Enabling OTLP over HTTP
+        # The Collector will listen on this address for incoming OTLP/HTTP data
+        # from my Svelte application.
+        # 0.0.0.0 means listen on all available network interfaces on this machine.
+        # 4318 is the default port for OTLP/HTTP.
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  
+  # Filter out health check spans
+  filter:
+    spans:
+      exclude:
+        match_type: regexp
+        services: [".*"]
+        span_names: ["GET /api/health"]
+        attributes: 
+          - key: "http.route"
+            value: "/api/health"
+
+exporters:
+  otlphttp:
+    endpoint: https://ingest.in.signoz.cloud
+    headers:
+      "signoz-access-token": "${SIGNOZ_ACCESS_TOKEN}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, filter]
+      exporters: [otlphttp]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]
+
+  telemetry:
+    logs:
+      level: "info" 
