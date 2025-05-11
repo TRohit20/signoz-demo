@@ -7,6 +7,9 @@ receivers:
         # 0.0.0.0 means listen on all available network interfaces on this machine.
         # 4318 is the default port for OTLP/HTTP.
         endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:5173"
 
 processors:
   batch: {}

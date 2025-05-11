@@ -1,9 +1,15 @@
 <script>
 	import Header from './Header.svelte';
 	import '../app.css';
-	import '../lib/otel-init';
+	import { initializeOpenTelemetry } from '../lib/otel-init';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
+
+	onMount(() => {
+		// Initialize OpenTelemetry when the app starts
+		initializeOpenTelemetry('svelte-otel-app');
+	});
 </script>
 
 <div class="app">
