@@ -1,6 +1,7 @@
 <script>
 	import Header from './Header.svelte';
 	import '../app.css';
+	import '../lib/otel-init';
 
 	let { children } = $props();
 </script>
