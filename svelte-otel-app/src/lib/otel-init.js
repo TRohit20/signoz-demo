@@ -1,101 +1,102 @@
-import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
+import { trace as otelApiTrace, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { Resource } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import { trace, context, SpanStatusCode } from '@opentelemetry/api';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { getWebAutoInstrumentations } from '@opentelemetry/auto-instrumentations-web';
+import { ZoneContextManager } from '@opentelemetry/context-zone';
+import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'; 
 
-// Test the connection to SigNoz first
-fetch('https://ingest.<YOUR-REGION>.signoz.cloud/v1/traces', {
-  method: 'POST',
-  headers: {
-    'signoz-access-token': '${SIGNZ_ACCESS_TOKEN}',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    resourceSpans: [{
-      resource: {
-        attributes: [{
-          key: 'service.name',
-          value: { stringValue: 'svelte-app' }
-        }]
-      },
-      scopeSpans: [{
-        spans: [{
-          traceId: '00000000000000000000000000000000',
-          spanId: '0000000000000000',
-          name: 'test-connection',
-          kind: 1,
-          startTimeUnixNano: Date.now() * 1000000,
-          endTimeUnixNano: Date.now() * 1000000
-        }]
-      }]
-    }]
-  })
-}).then(response => {
-  console.log('SigNoz connection test response:', response.status, response.statusText);
-}).catch(error => {
-  console.error('SigNoz connection test failed:', error);
-});
+import * as OTelSdkTraceWeb from '@opentelemetry/sdk-trace-web';
 
-// Set up the OTLP exporter with more debugging
-const exporter = new OTLPTraceExporter({
-  url: 'https://ingest.in.signoz.cloud/v1/traces',
-  headers: {
-    'signoz-access-token': '1JOYAoopEA25PDz0GQ46L2hDG0NPeFHc0n6a',
-    'Content-Type': 'application/json'
-  },
-  onSuccess: (response) => {
-    console.log('Trace exported successfully:', response);
-  },
-  onError: (error) => {
-    console.error('Trace export failed:', error);
+// --- DIAGNOSTIC LOGS for @opentelemetry/sdk-trace-web ---
+console.log('[OTel Import Check] OTelSdkTraceWeb (namespace import):', OTelSdkTraceWeb);
+const WebTracerProvider = OTelSdkTraceWeb.WebTracerProvider;
+const SimpleSpanProcessor = OTelSdkTraceWeb.SimpleSpanProcessor;
+const BatchSpanProcessor = OTelSdkTraceWeb.BatchSpanProcessor;
+
+console.log('[OTel Import Check] typeof WebTracerProvider from namespace:', typeof WebTracerProvider, WebTracerProvider);
+console.log('[OTel Import Check] typeof SimpleSpanProcessor from namespace:', typeof SimpleSpanProcessor, SimpleSpanProcessor);
+
+const COLLECTOR_OTLP_HTTP_ENDPOINT = 'http://localhost:4318/v1/traces';
+
+export function initializeOpenTelemetry(serviceName = 'default-svelte-service') {
+  console.log(`[OTel Init] Initializing OpenTelemetry for service: ${serviceName}`);
+
+  // Defensive checks
+  if (typeof Resource !== 'function' || typeof Resource.default !== 'function') {
+    console.error('[OTel Init CRITICAL] Resource class not imported correctly.'); return;
   }
-});
+  if (typeof WebTracerProvider !== 'function') { 
+    console.error('[OTel Init CRITICAL] WebTracerProvider class not imported correctly from OTelSdkTraceWeb namespace.');
+    console.error('[OTel Init CRITICAL] Inspected WebTracerProvider:', WebTracerProvider);
+    console.error('[OTel Init CRITICAL] Full OTelSdkTraceWeb namespace was:', OTelSdkTraceWeb); 
+    return;
+  }
+  if (typeof SimpleSpanProcessor !== 'function') {
+    console.error('[OTel Init CRITICAL] SimpleSpanProcessor not imported correctly from OTelSdkTraceWeb namespace.'); return;
+  }
+   if (typeof OTLPTraceExporter !== 'function') {
+    console.error('[OTel Init CRITICAL] OTLPTraceExporter not imported correctly.'); return;
+  }
+  if (typeof ConsoleSpanExporter !== 'function') {
+    console.error('[OTel Init CRITICAL] ConsoleSpanExporter not imported correctly.'); return;
+  }
 
-// Configure the tracer provider with the span processor
-const provider = new WebTracerProvider({
-  resource: new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'svelte-app',
-    [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: 'development',
-    [SemanticResourceAttributes.SERVICE_VERSION]: '1.0.0',
-  }),
-  spanProcessor: new SimpleSpanProcessor(exporter)
-});
+  const resource = Resource.default().merge(
+    new Resource({
+      [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
+      [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: 'development',
+      [SemanticResourceAttributes.SERVICE_VERSION]: '1.0.0',
+    })
+  );
+  console.log('[OTel Init] Resource created.');
 
-// Register the provider
-provider.register();
-
-// Register auto-instrumentations
-registerInstrumentations({
-  instrumentations: [
-    getWebAutoInstrumentations(),
-    new FetchInstrumentation()
-  ],
-});
-
-// Create a test span to verify the setup
-const tracer = trace.getTracer('svelte-app-tracer');
-
-// Function to create and send a test span
-function createTestSpan() {
-  const span = tracer.startSpan('test-span');
-  span.setAttribute('test.attribute', 'test-value');
-  span.setAttribute('test.timestamp', new Date().toISOString());
-  span.addEvent('test-event', {
-    'test.message': 'Test event from browser'
+  const provider = new WebTracerProvider({ 
+    resource: resource,
   });
-  span.end();
-  console.log('Test span created and ended');
+  console.log('[OTel Init] WebTracerProvider instantiated. Provider object:', provider);
+  console.log('[OTel Init] Checking provider.addSpanProcessor before call: typeof = ', typeof provider.addSpanProcessor);
+
+  const otlpExporter = new OTLPTraceExporter({
+    url: COLLECTOR_OTLP_HTTP_ENDPOINT,
+    onSuccess: () => console.log('[OTel OTLP Exporter] Trace batch exported to Collector'),
+    onError: (error) => console.error('[OTel OTLP Exporter] Trace batch export to Collector failed:', error)
+  });
+  console.log('[OTel Init] OTLPExporter created.');
+
+  const consoleExporterForDebug = new ConsoleSpanExporter();
+  console.log('[OTel Init] ConsoleExporter created.');
+
+
+  if(typeof SimpleSpanProcessor === 'function') {
+    provider.addSpanProcessor(new SimpleSpanProcessor(consoleExporterForDebug));
+    console.log('[OTel Init] ConsoleSpanExporter processor added.');
+
+    provider.addSpanProcessor(new SimpleSpanProcessor(otlpExporter));
+    console.log('[OTel Init] OTLPSpanProcessor (Simple) added.');
+  } else {
+    console.error("[OTel Init CRITICAL] SimpleSpanProcessor is not a function, can't add span processors!");
+  }
+
+
+  provider.register({ contextManager: new ZoneContextManager() });
+  console.log('[OTel Init] Provider registered.');
+
+  registerInstrumentations({
+    instrumentations: [getWebAutoInstrumentations()],
+  });
+  console.log('[OTel Init] Auto-instrumentations registered.');
+
+  const tracer = otelApiTrace.getTracer('svelte-frontend-tracer'); 
+  function createAndLogTestSpan(spanName = 'manual-test-span-from-init') {
+    const span = tracer.startSpan(spanName);
+    console.log(`[OTel] Manual span "${spanName}" started. TraceID: ${span.spanContext().traceId}`);
+    span.end(); 
+    console.log(`[OTel] Manual span "${spanName}" ended.`);
+  }
+  createAndLogTestSpan('initial-load-test-span');
+  // setInterval(() => createAndLogTestSpan('periodic-test-span'), 7000);
+
+  console.log(`[OTel Init] OpenTelemetry initialization nominally complete for ${serviceName}.`);
 }
-
-// Create initial test span
-createTestSpan();
-
-// Create test span every 5 seconds
-setInterval(createTestSpan, 5000);
-
-console.log('OpenTelemetry initialized!');
