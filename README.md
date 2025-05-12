@@ -64,7 +64,7 @@ In this tutorial, we will:
 6. Configure the Collector to filter out traces from our `/health` page
 7. Send the remaining traces to SigNoz Cloud
 
-## Step 1: Prerequisites and Setup
+## 1: Prerequisites and Setup
 
 ### 1.1 Node.js and npm (Node Package Manager)
 
@@ -77,15 +77,15 @@ SvelteKit and all the OpenTelemetry JavaScript libraries require Node.js and its
    * **Linux:** Usually `Ctrl + Alt + T` opens a terminal
 
 2. Check Node.js version:
-   ```bash
-   node -v
-   ```
+        ```bash
+        node -v
+        ```
    If installed, you'll see a version number like `v18.17.0` or `v20.5.0`
 
 3. Check npm version:
-   ```bash
-   npm -v
-   ```
+        ```bash
+        npm -v
+        ```
    If installed, you'll see a version number like `9.6.7` or `10.1.0`
 
 #### How to Install Node.js and npm:
@@ -107,16 +107,16 @@ SigNoz is where your app's performance data will be sent, stored, and visualized
    * **SigNoz Access Token:** A secret key for authenticating data submissions
 
 Store these values securely in a text file:
-```text
-SigNoz OTLP Endpoint URL: <paste the URL here>
-SigNoz Access Token: <paste the token here>
-```
+        ```text
+        SigNoz OTLP Endpoint URL: <paste the URL here>
+        SigNoz Access Token: <paste the token here>
+        ```
 
 If you have any difficulties finding these values or need more details, refer to:
 - [SigNoz Cloud Overview](https://signoz.io/docs/ingestion/signoz-cloud/overview/#endpoint)
 - [SigNoz Cloud Keys](https://signoz.io/docs/ingestion/signoz-cloud/keys/)
 
-## Step 2: Setting Up Your SvelteKit Project
+## 2: Setting Up Your SvelteKit Project
 
 ### 2.1 Create Your SvelteKit Project
 
@@ -130,9 +130,9 @@ If you have any difficulties finding these values or need more details, refer to
    ```
 
 2. Create a new SvelteKit project:
-   ```bash
-   npm create svelte@latest demo-otel-app
-   ```
+        ```bash
+        npm create svelte@latest demo-otel-app
+        ```
 
 3. Follow the setup prompts:
    * Choose "SvelteKit demo app"
@@ -141,15 +141,15 @@ If you have any difficulties finding these values or need more details, refer to
    * Disable Playwright and Vitest
 
 4. Navigate to your project and install dependencies:
-   ```bash
-   cd demo-otel-app
-   npm install
-   ```
+        ```bash
+        cd demo-otel-app
+        npm install
+        ```
 
 5. Start the development server:
-   ```bash
-   npm run dev
-   ```
+        ```bash
+        npm run dev
+        ```
 
 6. Visit `http://localhost:5173/` in your browser to verify the setup
 
@@ -162,31 +162,31 @@ If you have any difficulties finding these values or need more details, refer to
 
 2. Add the following code to `+page.svelte`:
    ```svelte
-   <script>
-     import { onMount } from 'svelte';
+        <script>
+          import { onMount } from 'svelte';
 
-     onMount(() => {
-       console.log('The /health page has loaded in the browser. (OpenTelemetry should trace this page load if active).');
-     });
-   </script>
+          onMount(() => {
+            console.log('The /health page has loaded in the browser. (OpenTelemetry should trace this page load if active).');
+          });
+        </script>
 
-   <div>
-     <h1>Application Health Status</h1>
-     <p>Status: OK - Everything is running smoothly!</p>
-     <p>
-       This page is typically used by automated monitoring systems (like load balancers or uptime checkers)
-       to verify that the application is responsive and healthy.
-     </p>
-     <p>
-       For our OpenTelemetry setup, we will configure the OpenTelemetry Collector to specifically
-       <strong>filter out (ignore)</strong> any performance traces generated from visits to this `/health` page.
-       This helps keep our main performance data clean and focused on real user interactions.
-     </p>
-   </div>
+        <div>
+          <h1>Application Health Status</h1>
+          <p>Status: OK - Everything is running smoothly!</p>
+          <p>
+            This page is typically used by automated monitoring systems (like load balancers or uptime checkers)
+            to verify that the application is responsive and healthy.
+          </p>
+          <p>
+            For our OpenTelemetry setup, we will configure the OpenTelemetry Collector to specifically
+            <strong>filter out (ignore)</strong> any performance traces generated from visits to this `/health` page.
+            This helps keep our main performance data clean and focused on real user interactions.
+          </p>
+        </div>
 
-   <style>
-     div {
-       padding: 25px;
+        <style>
+          div {
+            padding: 25px;
        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
        text-align: center;
        max-width: 650px;
@@ -198,15 +198,15 @@ If you have any difficulties finding these values or need more details, refer to
      }
      h1 {
        color: #2c3e50;
-       margin-bottom: 20px;
-     }
-     p {
+            margin-bottom: 20px;
+          }
+          p {
        color: #34495e;
-       font-size: 1.1em;
+            font-size: 1.1em;
        line-height: 1.6;
-     }
-   </style>
-   ```
+          }
+        </style>
+        ```
 
 3. Test the healthcheck page:
    * Start the development server if not running: `npm run dev`
@@ -214,7 +214,7 @@ If you have any difficulties finding these values or need more details, refer to
    * Check the browser console for the log message
    * Stop the server with `Ctrl+C` when done
 
-## Step 3: Configure the OpenTelemetry Collector
+## 3: Configure the OpenTelemetry Collector
 
 The Collector will act as our local telemetry agent, receiving data from the Svelte app, filtering it, and forwarding it to SigNoz Cloud.
 
@@ -431,9 +431,252 @@ The Collector will act as our local telemetry agent, receiving data from the Sve
    ```
 
 ## Resources
-
 * [SvelteKit Official Documentation: Creating a Project](https://kit.svelte.dev/docs/creating-a-project)
 * [Svelte Interactive Tutorial](https://svelte.dev/tutorial/basics)
 * [OpenTelemetry Collector Configuration Overview](https://opentelemetry.io/docs/collector/configuration/)
 * [OpenTelemetry JavaScript - Getting Started](https://opentelemetry.io/docs/instrumentation/js/getting-started/)
 
+
+## 4. Verifying the Setup
+
+This section helps you verify if your observability setup is working correctly, from trace generation to visualization in SigNoz.
+
+### 4.1 Pre-Execution Checklist
+
+1. **Clear Vite Cache:**
+   ```bash
+   # From your SvelteKit project root
+   rm -rf .vite
+   ```
+   This ensures Vite rebuilds dependencies with the latest changes.
+
+2. **Start Components in Order:**
+   ```bash
+   # Terminal 1: Start OpenTelemetry Collector
+   cd ~/otel-collector-workspace
+   ./otelcol-contrib --config ./collector-config.yaml
+
+   # Terminal 2: Start SvelteKit Development Server
+   cd ~/path/to/your/svelte-app
+   npm run dev
+   ```
+
+3. **Open Browser Developer Tools:**
+   * Open your application at `http://localhost:5173`
+   * Press F12 or right-click > Inspect > Console
+   * Enable "Preserve log" in the Console settings
+
+### 4.2 Verify Trace Generation
+
+1. **Browser Console Verification:**
+   * Look for initialization logs from `otel-init.js`
+   * Verify successful span creation and export
+   * Check for any error messages
+   [Insert Screenshot: Browser console showing successful OpenTelemetry initialization logs and span creation]
+
+2. **Network Activity:**
+   * In Developer Tools, switch to the Network tab
+   * Filter for requests to `http://localhost:4318/v1/traces`
+   * Verify successful POST requests (200/202 status codes)
+   [Insert Screenshot: Network tab showing successful POST requests to the Collector endpoint]
+
+3. **Collector Logs:**
+   * Check the Collector terminal for:
+     * Successful startup messages
+     * Trace reception logs
+     * Export attempts to SigNoz
+   ![image](./images/otel-init.png)
+
+### 4.3 Verify in SigNoz
+
+1. **Service Discovery:**
+   * Log in to SigNoz Cloud
+   * Navigate to Services
+   * Verify your service appears in the list
+   ![image](./images/services-page.png)
+
+2. **Trace Verification:**
+   * Generate test traffic:
+     ```bash
+     # Visit these URLs in your browser
+     http://localhost:5173/
+     http://localhost:5173/about
+     http://localhost:5173/health
+     ```
+   * In SigNoz:
+     * Check for traces from `/` and `/about`
+     * Verify `/health` traces are filtered out
+     * Examine trace details and spans
+   ![image](./images/list-view.png)
+
+### 4.4 Healthcheck Filter Verification
+
+If `/health` traces appear in SigNoz:
+
+1. **Temporarily Disable Filter:**
+   ```yaml
+   # collector-config.yaml
+   service:
+     pipelines:
+       traces:
+         processors: [batch]  # Remove 'filter' temporarily
+   ```
+
+2. **Capture Test Trace:**
+   * Visit `/health` endpoint
+   * Find the trace in SigNoz
+   * Note the span attributes
+
+3. **Update Filter Rule:**
+   ```yaml
+   # collector-config.yaml
+   processors:
+     filter:
+       traces:
+         exclude:
+           match_type: strict
+           spans:
+             - 'attributes["url.path"] == "/health"'
+   ```
+
+4. **Re-enable and Test:**
+   * Restart Collector
+   * Visit `/health` again
+   * Verify traces are now filtered
+
+## 5. Troubleshooting Guide
+
+### 5.1 Common Issues
+
+1. **No Traces in SigNoz:**
+   * Verify Collector is running
+   * Check browser console for errors
+   * Confirm network requests to Collector
+   * Validate SigNoz credentials
+
+2. **Filter Not Working:**
+   * Check filter configuration
+   * Verify span attributes
+   * Test with different match types
+   * Review Collector logs
+
+3. **Import Errors:**
+   * Clear Vite cache
+   * Verify import statements
+   * Check package versions
+   * Review browser console
+
+### 5.2 Debugging Steps
+
+1. **Client-Side:**
+   ```javascript
+   // Add to otel-init.js for debugging
+   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
+   ```
+
+2. **Collector:**
+   ```yaml
+   # collector-config.yaml
+   service:
+     telemetry:
+       logs:
+         level: debug
+   ```
+
+3. **Network:**
+   * Use browser DevTools
+   * Check CORS settings
+   * Verify endpoints
+   * Monitor request/response
+
+## Resources
+
+* [SvelteKit Documentation](https://kit.svelte.dev/docs)
+* [OpenTelemetry JavaScript](https://opentelemetry.io/docs/instrumentation/js/)
+* [SigNoz Documentation](https://signoz.io/docs/)
+* [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/)
+
+## 6. Understanding Your Traces in SigNoz
+
+### 6.1 Trace Visualization
+
+1. **Trace List View:**
+   * Navigate to the Traces section in SigNoz
+   * View the list of recent traces
+   * Note the following for each trace:
+     * Duration
+     * Status (success/error)
+     * Service name
+     * Operation name
+   ![image](./images/list-view.png)
+
+2. **Trace Detail View:**
+   * Click on any trace to see its detailed view
+   * Observe the waterfall diagram showing:
+     * Parent-child relationships between spans
+     * Duration of each operation
+     * Timing of events
+   ![image](./images/trace-view.png)
+
+### 6.2 Common Trace Patterns
+
+1. **Page Load Traces:**
+   * Look for traces starting with `documentLoad`
+   * Observe the sequence:
+     * Initial HTML load
+     * Resource loading (JS, CSS)
+     * Client-side initialization
+
+2. **API Call Traces:**
+   * Identify `fetch` or `XMLHttpRequest` spans
+   * Check for:
+     * Request duration
+     * Response status
+     * Error messages if any
+
+3. **User Interaction Traces:**
+   * Find traces triggered by clicks or form submissions
+   * Analyze the complete flow:
+     * User action
+     * Subsequent API calls
+     * UI updates
+   ![image](./images/pattern.png)
+
+### 6.3 Creating Custom Views
+
+1. **Trace Queries:**
+   * Use the query builder to filter traces by:
+     * Service name
+     * Operation name
+     * Duration
+     * Status
+   ![image](./images/custom-view.png)
+
+2. **Saved Views:**
+   * Create and save custom views for:
+     * Error traces
+     * Slow operations
+     * Specific user flows
+
+## Conclusion
+
+With that, you have successfully instrumented your Svelte application and send the traces to Signoz cloud through OpenTelemetry collector.
+
+### Support and Resources
+
+If you need help or want to learn more:
+
+1. **Community Support:**
+   * [Svelte Discord](https://svelte.dev/chat)
+
+2. **Documentation:**
+   * [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+   * [SigNoz Documentation](https://signoz.io/docs/)
+   * [SvelteKit Documentation](https://kit.svelte.dev/docs)
+
+3. **Contributing:**
+   * [OpenTelemetry GitHub](https://github.com/open-telemetry)
+   * [SigNoz GitHub](https://github.com/SigNoz/signoz)
+   * [SvelteKit GitHub](https://github.com/sveltejs/kit)
+
+---

@@ -42,7 +42,7 @@ console.log('[OTel Init - Values Check] ConsoleSpanExporter:', typeof ConsoleSpa
 
 const COLLECTOR_OTLP_HTTP_ENDPOINT = 'http://localhost:4318/v1/traces';
 
-export function initializeOpenTelemetry(serviceName = 'default-svelte-app') {
+export function initializeOpenTelemetry(serviceName = 'svelte-otel-app') {
   console.log(`[OTel Init] Starting OpenTelemetry initialization for service: ${serviceName}`);
   console.log('[OTel Init] Environment check:', {
     isBrowser: typeof window !== 'undefined',
