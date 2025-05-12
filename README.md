@@ -4,7 +4,7 @@ This step-by-step implementation guide walks you through different concepts whil
 
 ## Prerequisites
 
-This tutorial expects you to have basic understanding of Svelte or SvelteKit and JavaScript
+This tutorial expects you to have basic understanding of Svelte or SvelteKit and JavaScript.
 
 ## What is Observability?
 
@@ -214,7 +214,226 @@ If you have any difficulties finding these values or need more details, refer to
    * Check the browser console for the log message
    * Stop the server with `Ctrl+C` when done
 
+## Step 3: Configure the OpenTelemetry Collector
+
+The Collector will act as our local telemetry agent, receiving data from the Svelte app, filtering it, and forwarding it to SigNoz Cloud.
+
+### 3.1 Download and Setup
+
+1. Navigate to the [OpenTelemetry Collector Contrib GitHub Releases](https://github.com/open-telemetry/opentelemetry-collector-contrib/releases)
+2. Select the latest stable release version
+3. From the "Assets" section, download the appropriate binary for your OS and architecture:
+   * Windows: `otelcol-contrib_VERSION_windows_amd64.exe`
+   * macOS: `otelcol-contrib_VERSION_darwin_arm64`
+   * Linux: `otelcol-contrib_VERSION_linux_amd64`
+
+### 3.2 Organize Files
+
+1. Create a dedicated directory for the Collector:
+   ```bash
+   # macOS/Linux
+   mkdir ~/otel-collector-workspace
+   
+   # Windows
+   mkdir C:\OTelCollector
+   ```
+
+2. Move the downloaded binary into this directory and rename it to `otelcol-contrib` (or `otelcol-contrib.exe` for Windows)
+
+3. Set executable permissions (macOS/Linux only):
+   ```bash
+   chmod +x otelcol-contrib
+   ```
+
+### 3.3 Configure the Collector
+
+1. Create a new file named `collector-config.yaml` in your Collector directory
+
+2. Add the following configuration (replace placeholders with your actual SigNoz credentials):
+   ```yaml
+   receivers:
+     otlp: 
+       protocols:
+         http: 
+           endpoint: "0.0.0.0:4318"
+
+   processors:
+     batch: {} 
+
+     filter: 
+       traces: 
+         exclude: 
+           match_type: strict 
+           spans:
+             - 'attributes["url.path"] == "/health"'
+
+   exporters:
+     otlphttp/signoz:
+       endpoint: "YOUR_SIGNOZ_OTLP_HTTP_ENDPOINT"
+       headers:
+         "signoz-access-token": "YOUR_SIGNOZ_ACCESS_TOKEN"
+
+   service:
+     pipelines:
+       traces:
+         receivers: [otlp]                
+         processors: [batch, filter]      
+         exporters: [otlphttp/signoz]     
+   ```
+
+3. **Important:** Replace the placeholders:
+   * `YOUR_SIGNOZ_OTLP_HTTP_ENDPOINT` with your actual endpoint
+   * `YOUR_SIGNOZ_ACCESS_TOKEN` with your actual token
+
+### 3.4 Run the Collector
+
+1. Open a new terminal window for the Collector
+2. Navigate to your Collector directory
+3. Start the Collector:
+   ```bash
+   # macOS/Linux
+   ./otelcol-contrib --config ./collector-config.yaml
+   
+   # Windows
+   .\otelcol-contrib.exe --config .\collector-config.yaml
+   ```
+
+4. Monitor the terminal output for successful startup
+5. Keep this terminal window open while working with your Svelte app
+
+### 3.5 Install OpenTelemetry Dependencies
+
+1. Navigate to your SvelteKit project directory
+2. Install required packages:
+   ```bash
+   npm install @opentelemetry/api \
+               @opentelemetry/resources \
+               @opentelemetry/semantic-conventions \
+               @opentelemetry/sdk-trace-web \
+               @opentelemetry/sdk-trace-base \
+               @opentelemetry/exporter-trace-otlp-http \
+               @opentelemetry/instrumentation \
+               @opentelemetry/auto-instrumentations-web \
+               @opentelemetry/context-zone
+   ```
+
+### 3.6 Implement OpenTelemetry Initialization
+
+1. Create `src/lib/otel-init.js` with the following code:
+   ```javascript
+   import * as otelApi from '@opentelemetry/api';
+   import * as otelResources from '@opentelemetry/resources';
+   import * as otelSemanticConventions from '@opentelemetry/semantic-conventions';
+   import * as otelSdkTraceWeb from '@opentelemetry/sdk-trace-web';
+   import * as otelExporterTraceOtlpHttp from '@opentelemetry/exporter-trace-otlp-http';
+   import * as otelInstrumentation from '@opentelemetry/instrumentation';
+   import * as otelAutoInstWeb from '@opentelemetry/auto-instrumentations-web';
+   import * as otelContextZone from '@opentelemetry/context-zone';
+   import * as otelSdkTraceBase from '@opentelemetry/sdk-trace-base';
+
+   const { trace: otelApiTrace, DiagConsoleLogger, DiagLogLevel, diag } = otelApi;
+   const { Resource } = otelResources;
+   const { SemanticResourceAttributes } = otelSemanticConventions;
+   const { WebTracerProvider, SimpleSpanProcessor, BatchSpanProcessor } = otelSdkTraceWeb;
+   const { OTLPTraceExporter } = otelExporterTraceOtlpHttp;
+   const { registerInstrumentations } = otelInstrumentation;
+   const { getWebAutoInstrumentations } = otelAutoInstWeb;
+   const { ZoneContextManager } = otelContextZone;
+   const { ConsoleSpanExporter } = otelSdkTraceBase;
+
+   const COLLECTOR_OTLP_HTTP_ENDPOINT = 'http://localhost:4318/v1/traces';
+
+   export function initializeOpenTelemetry(serviceName = 'default-svelte-app') {
+     console.log(`[OTel Init] Starting OpenTelemetry initialization for service: ${serviceName}`);
+
+     try {
+       // Enable debug logging
+       diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
+
+       // Create resource
+       const resource = Resource.default().merge(
+         new Resource({
+           [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
+           [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: 'development',
+           [SemanticResourceAttributes.SERVICE_VERSION]: '1.0.0',
+         })
+       );
+
+       // Initialize provider
+       const provider = new WebTracerProvider({ resource });
+
+       // Add console exporter for debugging
+       const consoleExporter = new ConsoleSpanExporter();
+       provider.addSpanProcessor(new SimpleSpanProcessor(consoleExporter));
+
+       // Add OTLP exporter
+       const otlpExporter = new OTLPTraceExporter({
+         url: COLLECTOR_OTLP_HTTP_ENDPOINT,
+         headers: { 'Content-Type': 'application/json' }
+       });
+
+       provider.addSpanProcessor(
+         new BatchSpanProcessor(otlpExporter, {
+           scheduledDelayMillis: 1000,
+           maxQueueSize: 2048,
+           maxExportBatchSize: 512,
+         })
+       );
+
+       // Register provider
+       provider.register({
+         contextManager: new ZoneContextManager()
+       });
+
+       // Register auto-instrumentations
+       registerInstrumentations({
+         instrumentations: [
+           getWebAutoInstrumentations({
+             '@opentelemetry/instrumentation-fetch': {
+               propagateTraceHeaderCorsUrls: [/.+/g],
+               clearTimingResources: true,
+             },
+             '@opentelemetry/instrumentation-document-load': {},
+             '@opentelemetry/instrumentation-user-interaction': {},
+             '@opentelemetry/instrumentation-xml-http-request': {}
+           }),
+         ],
+       });
+
+       console.log(`[OTel Init] OpenTelemetry initialization completed for service: ${serviceName}`);
+     } catch (error) {
+       console.error('[OTel Init] Error during initialization:', error);
+     }
+   }
+   ```
+
+### 3.7 Initialize in Layout
+
+1. Update `src/routes/+layout.svelte`:
+   ```svelte
+   <script>
+     import { onMount } from 'svelte';
+     import { browser } from '$app/environment';
+
+     onMount(async () => {
+       if (browser) {
+         try {
+           const otelModule = await import('$lib/otel-init.js');
+           otelModule.initializeOpenTelemetry('my-svelte-app');
+         } catch (error) {
+           console.error('[Layout] Failed to initialize OpenTelemetry:', error);
+         }
+       }
+     });
+   </script>
+
+   <slot />
+   ```
+
 ## Resources
 
 * [SvelteKit Official Documentation: Creating a Project](https://kit.svelte.dev/docs/creating-a-project)
 * [Svelte Interactive Tutorial](https://svelte.dev/tutorial/basics)
+* [OpenTelemetry Collector Configuration Overview](https://opentelemetry.io/docs/collector/configuration/)
+* [OpenTelemetry JavaScript - Getting Started](https://opentelemetry.io/docs/instrumentation/js/getting-started/)
+
