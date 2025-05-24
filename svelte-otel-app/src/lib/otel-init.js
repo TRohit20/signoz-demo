@@ -7,9 +7,11 @@ import * as otelInstrumentation from '@opentelemetry/instrumentation';
 import * as otelAutoInstWeb from '@opentelemetry/auto-instrumentations-web';
 import * as otelContextZone from '@opentelemetry/context-zone';
 import * as otelSdkTraceBase from '@opentelemetry/sdk-trace-base'; 
+import * as otelSdkMetrics from '@opentelemetry/sdk-metrics';
+import * as otelExporterMetricsOtlpHttp from '@opentelemetry/exporter-metrics-otlp-http';
 
 // Destructure/assign the specific classes/objects we need from the namespaces
-const { trace: otelApiTrace, DiagConsoleLogger, DiagLogLevel, diag } = otelApi; 
+const { trace: otelApiTrace, metrics: otelApiMetrics, DiagConsoleLogger, DiagLogLevel, diag } = otelApi; 
 const { Resource } = otelResources;
 const { SemanticResourceAttributes } = otelSemanticConventions;
 const { WebTracerProvider, SimpleSpanProcessor, BatchSpanProcessor } = otelSdkTraceWeb; 
@@ -18,10 +20,13 @@ const { registerInstrumentations } = otelInstrumentation;
 const { getWebAutoInstrumentations } = otelAutoInstWeb;
 const { ZoneContextManager } = otelContextZone;
 const { ConsoleSpanExporter } = otelSdkTraceBase;
+const { MeterProvider, PeriodicExportingMetricReader } = otelSdkMetrics;
+const { OTLPMetricExporter } = otelExporterMetricsOtlpHttp;
 
 // --- BEGIN DIAGNOSTIC LOGS FOR IMPORTS (Crucial for debugging!) ---
 // These logs will help me confirm if the above destructuring was successful.
 console.log('[OTel Init - Values Check] otelApiTrace:', typeof otelApiTrace, otelApiTrace);
+console.log('[OTel Init - Values Check] otelApiMetrics:', typeof otelApiMetrics, otelApiMetrics);
 console.log('[OTel Init - Values Check] Resource:', typeof Resource, Resource);
 console.log('[OTel Init - Values Check] SemanticResourceAttributes:', typeof SemanticResourceAttributes, SemanticResourceAttributes);
 console.log('[OTel Init - Values Check] WebTracerProvider:', typeof WebTracerProvider, WebTracerProvider);
@@ -32,6 +37,9 @@ console.log('[OTel Init - Values Check] registerInstrumentations:', typeof regis
 console.log('[OTel Init - Values Check] getWebAutoInstrumentations:', typeof getWebAutoInstrumentations, getWebAutoInstrumentations);
 console.log('[OTel Init - Values Check] ZoneContextManager:', typeof ZoneContextManager, ZoneContextManager);
 console.log('[OTel Init - Values Check] ConsoleSpanExporter:', typeof ConsoleSpanExporter, ConsoleSpanExporter);
+console.log('[OTel Init - Values Check] MeterProvider:', typeof MeterProvider, MeterProvider);
+console.log('[OTel Init - Values Check] PeriodicExportingMetricReader:', typeof PeriodicExportingMetricReader, PeriodicExportingMetricReader);
+console.log('[OTel Init - Values Check] OTLPMetricExporter:', typeof OTLPMetricExporter, OTLPMetricExporter);
 // --- END DIAGNOSTIC LOGS FOR IMPORTS ---
 
 // More detailed OpenTelemetry internal logging (for debugging OTel itself)
@@ -41,13 +49,15 @@ console.log('[OTel Init - Values Check] ConsoleSpanExporter:', typeof ConsoleSpa
 // }
 
 const COLLECTOR_OTLP_HTTP_ENDPOINT = 'http://localhost:4318/v1/traces';
+const COLLECTOR_OTLP_HTTP_METRICS_ENDPOINT = 'http://localhost:4318/v1/metrics';
 
 export function initializeOpenTelemetry(serviceName = 'svelte-otel-app') {
   console.log(`[OTel Init] Starting OpenTelemetry initialization for service: ${serviceName}`);
   console.log('[OTel Init] Environment check:', {
     isBrowser: typeof window !== 'undefined',
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A',
-    collectorEndpoint: COLLECTOR_OTLP_HTTP_ENDPOINT
+    collectorTraceEndpoint: COLLECTOR_OTLP_HTTP_ENDPOINT,
+    collectorMetricsEndpoint: COLLECTOR_OTLP_HTTP_METRICS_ENDPOINT
   });
 
   try {
@@ -74,6 +84,12 @@ export function initializeOpenTelemetry(serviceName = 'svelte-otel-app') {
     if (!otelApiTrace || typeof otelApiTrace.getTracer !== 'function') {
         throw new Error('OpenTelemetry API (trace) not imported correctly.');
     }
+    if (!otelApiMetrics || typeof otelApiMetrics.getMeterProvider !== 'function' || typeof otelApiMetrics.setGlobalMeterProvider !== 'function') {
+        throw new Error('OpenTelemetry API (metrics) not imported correctly.');
+    }
+    if (typeof MeterProvider !== 'function') throw new Error('MeterProvider class not imported correctly.');
+    if (typeof PeriodicExportingMetricReader !== 'function') throw new Error('PeriodicExportingMetricReader class not imported correctly.');
+    if (typeof OTLPMetricExporter !== 'function') throw new Error('OTLPMetricExporter class not imported correctly.');
     console.log('[OTel Init] All essential OTel classes/functions appear to be imported.');
     // --- End Essential Type Checks ---
 
@@ -197,6 +213,62 @@ export function initializeOpenTelemetry(serviceName = 'svelte-otel-app') {
       console.error('[OTel Init] Failed to create test span:', error);
       throw error;
     }
+
+    // --- METRICS SETUP ---
+    try {
+      console.log('[OTel Init] Setting up OpenTelemetry Metrics...');
+
+      const metricExporter = new OTLPMetricExporter({
+        url: COLLECTOR_OTLP_HTTP_METRICS_ENDPOINT,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        onSuccess: () => console.log('[OTel OTLP Metrics Exporter] SUCCESS: Metrics batch exported to Collector.'),
+        onError: (error) => {
+          console.error('[OTel OTLP Metrics Exporter] ERROR: Metrics batch export to Collector FAILED:', error);
+          console.error('[OTel OTLP Metrics Exporter] Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
+        }
+      });
+      console.log('[OTel Init] OTLPMetricExporter instantiated.');
+
+      const metricReader = new PeriodicExportingMetricReader({
+        exporter: metricExporter,
+        exportIntervalMillis: 5000, // Export every 5 seconds
+        exportTimeoutMillis: 2000,
+      });
+      console.log('[OTel Init] PeriodicExportingMetricReader instantiated.');
+      
+      const meterProvider = new MeterProvider({
+        resource: resource,
+        readers: [metricReader],
+      });
+      console.log('[OTel Init] MeterProvider instantiated.');
+
+      // Verify meterProvider methods
+      if (typeof meterProvider.getMeter !== 'function') {
+        throw new Error('MeterProvider is not properly initialized - getMeter is not a function');
+      }
+
+      otelApiMetrics.setGlobalMeterProvider(meterProvider);
+      console.log('[OTel Init] Global MeterProvider set.');
+
+      // Manual Test Metric
+      const meter = meterProvider.getMeter(`${serviceName}-manual-meter`);
+      const counter = meter.createCounter('app.initializations', {
+        description: 'Counts the number of times the application initializes',
+      });
+      counter.add(1, { 'init.type': 'manual-test' });
+      console.log('[OTel Init] Manual test counter metric "app.initializations" incremented.');
+
+    } catch (error) {
+      console.error('[OTel Init] Failed to initialize metrics:', error);
+      // We don't re-throw here to allow tracing to potentially still work
+    }
+    // --- END METRICS SETUP ---
 
     console.log(`[OTel Init] OpenTelemetry initialization function completed successfully for service: ${serviceName}.`);
 
